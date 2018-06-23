@@ -1,4 +1,6 @@
   // Initialize Firebase
+
+var localdbData = [];
   var config = {
     apiKey: "AIzaSyAVEDWjJkLA4JmMVsoffl2ZX3WT2n8cCBM",
     authDomain: "ycis-train-activity.firebaseapp.com",
@@ -6,74 +8,73 @@
     projectId: "ycis-train-activity",
     storageBucket: "",
     messagingSenderId: "564554897256"
-  };
-  firebase.initializeApp(config);
+};
+firebase.initializeApp(config);
+var database = firebase.database();
 
- function TrainProto(name,dest,firstTime,freq) {
-     this.name = name;
-     this.dest = dest;
-     this.firstTime = firstTime;
-     this.frequency = freq;
- }
- function addTrain() {
-     var trainObj = new TrainProto(
-        $("#train-name").val().trim(),
-        $("#dest").val().trim(),
-        moment($("#first-time").val().trim(),'HH:mm'),
-        $("#frequency").val().trim()
-     )
-     database.ref().push(trainObj);
+function addTrain(e) {
+    var fields = $("#AdminForm").serializeArray();
+    database.ref().push({
+        name:fields[0].value,
+        dest:fields[1].value,
+        date:fields[2].value,
+        freq:fields[3].value
+    });
  }
  
  $(document).ready(function() {
-    intializeValidDate();
-     $('#train-table').empty();
-     $("#add-train").on("click",addTrain);
+    localdbData = [];
+    $('#tDate').datetimepicker();
+    $("#AdminForm").on("submit",addTrain);
+    
+    var timer = setInterval(fillTable,60000);
  })
 
- 
- database.ref().on("child_added", 
-     function(childSnapshot,prevChildKey) {
-         var snapVal = childSnapshot.val();
-         // console.log(childSnapshot.val()); 
-         var empName = childSnapshot.val().name;
-         var empRole = childSnapshot.val().role;
-         var dateStart = new Date(childSnapshot.val().start);
-         var monthlyRate = childSnapshot.val().rate;
 
-         var firstTimePretty = "";
-         var nextArrival = firstTimePretty; //calc next arrival time by looping until value > now
+ function add2Table(valArray) {
+    var html = '';
+    html += '<tr>';
+    for(var i=0; i < valArray.length; i++) {
+        html += '<td>' + valArray[i] + '</td>';
+    };
+    html += '</tr>';
+    $('#train-table').append($(html));
+}
 
-         add2Table([
-            snapVal.name,
-            snapVal.dest,
-            snapVal.frequency,
-            nextArrival, 
-            minAway // nextArrival - now rounded to minute
-        ]); 
- 
-     },
-     function(errorOutput) {
-         console.log(errorOutput);
-     }
- );
+function getFormRowArr(snapObj) {
+    var nextArrival = moment(snapObj.date);
+    while (moment().diff(nextArrival) > 0) {
+        nextArrival.add(snapObj.freq,'m');
+    }
+    if(nextArrival.diff(moment(),"m") == 0) {
+        var arrivalStr = "Now!!";
+    } else if (moment().format("MM/DD/YYYY") == nextArrival.format("MM/DD/YYYY")) {
+        arrivalStr = nextArrival.format("hh:mm A");
+    } else {
+        arrivalStr = nextArrival.format("MM/DD hh:mm A");
+    }
 
- function intializeValidDate() {
-    $('#trainForm').bootstrapValidator({
-        feedbackIcons: {
-            valid: 'glyphicon glyphicon-ok',
-            invalid: 'glyphicon glyphicon-remove',
-            validating: 'glyphicon glyphicon-refresh'
-        },
-        fields: {
-            firstTime: {
-                validators: {
-                    date: {
-                        format: 'HH:mm',
-                        message: 'The value is not a valid date'
-                    }
-                }
-            }
-        }
-    });
- }
+    return [
+        snapObj.name,
+        snapObj.dest,
+        snapObj.date,
+        arrivalStr,
+        "~" + (nextArrival.diff(moment(),"m")+1)
+    ];
+}
+
+function fillTable(){
+    console.log("Last Updated: " + moment().format("hh:mm A"));
+    $('#train-table').empty();
+    for(var i = 0; i < localdbData.length; i++) {
+        add2Table(getFormRowArr(localdbData[i]));
+    }
+}
+function popFromFB(childSnapshot,p) {
+    localdbData.push(childSnapshot.val());
+    fillTable();
+}
+function fbError(errorOutput) {
+    console.log(errorOutput);
+}
+database.ref().on("child_added", popFromFB,fbError);
