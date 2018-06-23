@@ -57,7 +57,7 @@ function getFormRowArr(snapObj) {
     return [
         snapObj.name,
         snapObj.dest,
-        snapObj.date,
+        snapObj.freq,
         arrivalStr,
         "~" + (nextArrival.diff(moment(),"m")+1)
     ];
